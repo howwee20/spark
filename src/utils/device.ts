@@ -1,28 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { v4 as uuidv4 } from 'uuid';
 
-const STORAGE_KEY = 'spark:device_id';
+const KEY = 'spark:device_id';
 
-const generateDeviceId = (): string => {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID();
+export async function getDeviceId(): Promise<string> {
+  try {
+    const existing = await AsyncStorage.getItem(KEY);
+    if (existing) return existing;
+    const id = uuidv4();
+    await AsyncStorage.setItem(KEY, id);
+    return id;
+  } catch {
+    return uuidv4(); // ephemeral fallback
   }
-
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
-    const random = Math.floor(Math.random() * 16);
-    const value = char === 'x' ? random : (random & 0x3) | 0x8;
-    return value.toString(16);
-  });
-};
-
-export const getDeviceId = async (): Promise<string> => {
-  const existingId = await AsyncStorage.getItem(STORAGE_KEY);
-
-  if (existingId) {
-    return existingId;
-  }
-
-  const newId = generateDeviceId();
-  await AsyncStorage.setItem(STORAGE_KEY, newId);
-
-  return newId;
-};
+}
