@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { getDeviceId } from '@/utils/device';
+import { ensurePushRegistration } from '@/lib/push';
 
 type LotStatus = 'empty' | 'filling' | 'tight' | 'full' | null;
 type LotRow = { id: string; name: string; lat: number; lng: number; status: LotStatus; confidence: number | null };
@@ -36,6 +37,8 @@ export default function MapScreen() {
   const [lots, setLots] = useState<LotRow[] | null>(null);
   const [selected, setSelected] = useState<LotRow | null>(null);
   const [subscribed, setSubscribed] = useState(false);
+  const [favoriteLotId, setFavoriteLotId] = useState<string | null>(null);
+  const [favoriteLoaded, setFavoriteLoaded] = useState(false);
   const pollRef = useRef<NodeJS.Timer | null>(null);
 
   async function fetchLots() {
@@ -54,6 +57,31 @@ export default function MapScreen() {
 
   useEffect(() => {
     fetchLots().catch((e)=> console.warn('fetchLots', e));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const device_id = await getDeviceId();
+        const { data, error } = await supabase
+          .from('favorites')
+          .select('lot_id')
+          .eq('device_id', device_id)
+          .maybeSingle();
+        if (!active) return;
+        if (!error && data?.lot_id) {
+          setFavoriteLotId(data.lot_id);
+        }
+      } catch (error) {
+        console.warn('fetchFavorite', error);
+      } finally {
+        if (active) setFavoriteLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -135,6 +163,41 @@ export default function MapScreen() {
     const until = now + COOLDOWN_MIN*60*1000;
     await AsyncStorage.setItem(key, String(until));
     setSelected(null);
+    ensurePushRegistration().catch((e) => console.warn('ensurePushRegistration', e));
+  };
+
+  const toggleFavorite = async () => {
+    if (!selected || !favoriteLoaded) return;
+
+    const device_id = await getDeviceId();
+    const current = favoriteLotId;
+    let success = false;
+
+    if (current === selected.id) {
+      setFavoriteLotId(null);
+      const { error } = await supabase.from('favorites').delete().eq('device_id', device_id);
+      if (error) {
+        setFavoriteLotId(current);
+        Alert.alert('Favorite failed', error.message);
+      } else {
+        success = true;
+      }
+    } else {
+      setFavoriteLotId(selected.id);
+      const { error } = await supabase
+        .from('favorites')
+        .upsert({ device_id, lot_id: selected.id });
+      if (error) {
+        setFavoriteLotId(current);
+        Alert.alert('Favorite failed', error.message);
+      } else {
+        success = true;
+      }
+    }
+
+    if (success) {
+      ensurePushRegistration().catch((e) => console.warn('ensurePushRegistration', e));
+    }
   };
 
   const content = useMemo(() => {
@@ -169,7 +232,20 @@ export default function MapScreen() {
       <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
         <View style={styles.modalWrap}>
           <View style={styles.sheet}>
-            <Text style={styles.title}>{selected?.name}</Text>
+            <View style={styles.headerRow}>
+              <Text style={styles.title}>{selected?.name}</Text>
+              <Pressable
+                style={styles.starButton}
+                onPress={toggleFavorite}
+                disabled={!favoriteLoaded}
+                accessibilityRole="button"
+                accessibilityLabel={favoriteLotId === selected?.id ? 'Remove favorite lot' : 'Mark as favorite lot'}
+              >
+                <Text style={[styles.star, favoriteLotId === selected?.id && styles.starActive]}>
+                  {favoriteLotId === selected?.id ? '★' : '☆'}
+                </Text>
+              </Pressable>
+            </View>
             <View style={styles.row}>
               <Pressable style={[styles.btn,{backgroundColor:'#22c55e'}]} onPress={()=>onSubmitStatus('empty')}>
                 <Text style={styles.btnText}>Empty</Text>
@@ -202,7 +278,11 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   modalWrap:{flex:1,backgroundColor:'rgba(0,0,0,0.3)',justifyContent:'center',alignItems:'center',padding:16},
   sheet:{backgroundColor:'white',borderRadius:16,padding:16,width:'100%',maxWidth:360},
-  title:{fontSize:18,fontWeight:'600',marginBottom:12,textAlign:'center'},
+  headerRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:12},
+  title:{fontSize:18,fontWeight:'600',textAlign:'left',flex:1},
+  starButton:{paddingHorizontal:8,paddingVertical:4},
+  star:{fontSize:26,color:'#d1d5db'},
+  starActive:{color:'#facc15'},
   row:{flexDirection:'row',gap:12,justifyContent:'space-between',marginBottom:12},
   btn:{flex:1,paddingVertical:14,borderRadius:12,alignItems:'center'},
   btnText:{color:'white',fontWeight:'700'},
