@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Circle, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '@/lib/supabase';
-import { getDeviceId } from '@/utils/device';
+import { supabase } from '../lib/supabase';
+import { getDeviceId } from '../utils/device';
+import PaceFab, { PaceReport } from '../components/PaceFab';
+import { cellIdToCoords } from '../utils/geocell';
 
 type LotStatus = 'empty' | 'filling' | 'tight' | 'full' | null;
 type LotRow = { id: string; name: string; lat: number; lng: number; status: LotStatus; confidence: number | null };
@@ -12,6 +14,16 @@ type LotRow = { id: string; name: string; lat: number; lng: number; status: LotS
 const MSU_CENTER: Region = { latitude: 42.727, longitude: -84.483, latitudeDelta: 0.03, longitudeDelta: 0.03 };
 const PROXIMITY_M = 150;
 const COOLDOWN_MIN = 20;
+const PACE_WINDOW_MIN = 45;
+const PACE_DELAY_MIN = 3;
+
+function pruneReports(reports: PaceReport[]) {
+  const cutoff = Date.now() - PACE_WINDOW_MIN * 60 * 1000;
+  return reports.filter((r) => {
+    const created = new Date(r.created_at).getTime();
+    return Number.isFinite(created) && created >= cutoff;
+  });
+}
 
 function statusToColor(s: LotStatus) {
   if (s === 'empty') return '#22c55e';
@@ -37,6 +49,8 @@ export default function MapScreen() {
   const [selected, setSelected] = useState<LotRow | null>(null);
   const [subscribed, setSubscribed] = useState(false);
   const pollRef = useRef<NodeJS.Timer | null>(null);
+  const [paceReports, setPaceReports] = useState<PaceReport[]>([]);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   async function fetchLots() {
     const { data, error } = await supabase
@@ -52,9 +66,22 @@ export default function MapScreen() {
     setLots(rows);
   }
 
+  const fetchPaceReports = useCallback(async () => {
+    const cutoffIso = new Date(Date.now() - PACE_WINDOW_MIN * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('pace_reports')
+      .select('id,cell_id,created_at')
+      .gte('created_at', cutoffIso)
+      .order('created_at', { ascending: false })
+      .returns<PaceReport[]>();
+    if (error) throw error;
+    setPaceReports(pruneReports(data ?? []));
+  }, []);
+
   useEffect(() => {
     fetchLots().catch((e)=> console.warn('fetchLots', e));
-  }, []);
+    fetchPaceReports().catch((e) => console.warn('fetchPaceReports', e));
+  }, [fetchPaceReports]);
 
   useEffect(() => {
     const channel = supabase.channel('realtime:lot_current')
@@ -89,6 +116,68 @@ export default function MapScreen() {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('realtime:pace_reports')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pace_reports' }, (payload: any) => {
+        if (payload.eventType === 'INSERT') {
+          const next = payload.new as PaceReport | null;
+          if (!next) return;
+          setPaceReports((prev) => pruneReports([next, ...prev.filter((r) => r.id !== next.id)]));
+        }
+      })
+      .subscribe();
+
+    const interval = setInterval(() => {
+      setNowTick(Date.now());
+      setPaceReports((prev) => pruneReports(prev));
+    }, 30000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const handleReportCreated = (report: PaceReport) => {
+    setPaceReports((prev) => pruneReports([report, ...prev.filter((r) => r.id !== report.id)]));
+  };
+
+  const paceCircles = useMemo(() => {
+    const delayMs = PACE_DELAY_MIN * 60 * 1000;
+    const windowMs = PACE_WINDOW_MIN * 60 * 1000;
+    const now = nowTick;
+    const perCell = new Map<string, { count: number }>();
+
+    paceReports.forEach((report) => {
+      const created = new Date(report.created_at).getTime();
+      if (!Number.isFinite(created)) return;
+      const age = now - created;
+      if (age < delayMs || age >= windowMs) return;
+      const existing = perCell.get(report.cell_id);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        perCell.set(report.cell_id, { count: 1 });
+      }
+    });
+
+    return Array.from(perCell.entries()).flatMap(([cellId, info]) => {
+      const coords = cellIdToCoords(cellId);
+      if (!coords) return [];
+      const radius = 180 + (info.count - 1) * 60;
+      return [
+        <Circle
+          key={`pace-${cellId}`}
+          center={{ latitude: coords.lat, longitude: coords.lng }}
+          radius={radius}
+          strokeColor="rgba(239,68,68,0.55)"
+          fillColor="rgba(248,113,113,0.25)"
+        />,
+      ];
+    });
+  }, [paceReports, nowTick]);
 
   const onSubmitStatus = async (status: Exclude<LotStatus, null>) => {
     if (!selected) return;
@@ -141,6 +230,7 @@ export default function MapScreen() {
     if (!lots) return <ActivityIndicator style={{ marginTop: 24 }} />;
     return (
       <MapView style={{ flex: 1 }} initialRegion={MSU_CENTER}>
+        {paceCircles}
         {lots.map(l => (
           <React.Fragment key={l.id}>
             <Marker
@@ -161,11 +251,12 @@ export default function MapScreen() {
         ))}
       </MapView>
     );
-  }, [lots]);
+  }, [lots, paceCircles]);
 
   return (
     <View style={{ flex: 1 }}>
       {content}
+      <PaceFab onReportCreated={handleReportCreated} />
       <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
         <View style={styles.modalWrap}>
           <View style={styles.sheet}>
