@@ -1,6 +1,6 @@
 import React from 'react';
 import { SafeAreaView, StatusBar } from 'react-native';
-import MapScreen from '@/screens/MapScreen';
+import MapScreen from '../src/screens/MapScreen';
 
 export default function Index() {
   return (
