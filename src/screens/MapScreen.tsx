@@ -3,7 +3,9 @@ import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } fr
 import MapView, { Marker, Circle, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// eslint-disable-next-line import/no-unresolved
 import { supabase } from '@/lib/supabase';
+// eslint-disable-next-line import/no-unresolved
 import { getDeviceId } from '@/utils/device';
 
 type LotStatus = 'empty' | 'filling' | 'tight' | 'full' | null;
@@ -37,6 +39,18 @@ export default function MapScreen() {
   const [selected, setSelected] = useState<LotRow | null>(null);
   const [subscribed, setSubscribed] = useState(false);
   const pollRef = useRef<NodeJS.Timer | null>(null);
+  const [carma, setCarma] = useState<number | null>(null);
+  const [tier, setTier] = useState<string | null>(null);
+  const [carmaLoading, setCarmaLoading] = useState(false);
+
+  const applyCarma = async (delta: number, reason: string) => {
+    const device_id = await getDeviceId();
+    const { data, error } = await supabase.functions.invoke('apply_carma', {
+      body: { phone_hash: null, device_id, delta, reason },
+    });
+    if (error) throw error;
+    return data as { carma: number; tier: string };
+  };
 
   async function fetchLots() {
     const { data, error } = await supabase
@@ -54,6 +68,24 @@ export default function MapScreen() {
 
   useEffect(() => {
     fetchLots().catch((e)=> console.warn('fetchLots', e));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setCarmaLoading(true);
+    applyCarma(0, 'initial_fetch')
+      .then((res) => {
+        if (!active || !res) return;
+        setCarma(res.carma);
+        setTier(res.tier);
+      })
+      .catch((err) => console.warn('fetchCarma', err))
+      .finally(() => {
+        if (active) setCarmaLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -135,6 +167,14 @@ export default function MapScreen() {
     const until = now + COOLDOWN_MIN*60*1000;
     await AsyncStorage.setItem(key, String(until));
     setSelected(null);
+
+    applyCarma(10, 'lot_report')
+      .then((res) => {
+        if (!res) return;
+        setCarma(res.carma);
+        setTier(res.tier);
+      })
+      .catch((err) => console.warn('apply_carma', err));
   };
 
   const content = useMemo(() => {
@@ -165,7 +205,17 @@ export default function MapScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      {content}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Spark</Text>
+        <View style={styles.carmaChip}>
+          <Text style={styles.carmaChipText}>
+            {carmaLoading ? 'Carma: …' : `Carma: ${carma ?? 0}${tier ? ` (${tier})` : ''}`}
+          </Text>
+        </View>
+      </View>
+      <View style={{ flex: 1 }}>
+        {content}
+      </View>
       <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
         <View style={styles.modalWrap}>
           <View style={styles.sheet}>
@@ -200,6 +250,10 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
+  header:{paddingHorizontal:16,paddingVertical:12,backgroundColor:'white',borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:'#e5e7eb',flexDirection:'row',alignItems:'center',justifyContent:'space-between'},
+  headerTitle:{fontSize:18,fontWeight:'700',color:'#111827'},
+  carmaChip:{backgroundColor:'#111827',borderRadius:999,paddingHorizontal:12,paddingVertical:6},
+  carmaChipText:{color:'white',fontWeight:'600'},
   modalWrap:{flex:1,backgroundColor:'rgba(0,0,0,0.3)',justifyContent:'center',alignItems:'center',padding:16},
   sheet:{backgroundColor:'white',borderRadius:16,padding:16,width:'100%',maxWidth:360},
   title:{fontSize:18,fontWeight:'600',marginBottom:12,textAlign:'center'},
