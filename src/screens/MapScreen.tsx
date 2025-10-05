@@ -3,9 +3,9 @@ import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } fr
 import MapView, { Marker, Circle, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../utils/device';
 import { coordsToCellId } from '../utils/geocell';
-import { supabase } from '../lib/supabase';
 
 type LotStatus = 'empty' | 'filling' | 'tight' | 'full' | null;
 type LotRow = { id: string; name: string; lat: number; lng: number; status: LotStatus; confidence: number | null; isFavorite?: boolean };
