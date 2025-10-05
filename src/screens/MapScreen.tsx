@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -7,22 +7,18 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  TextInput,
   View,
+  Platform,
 } from 'react-native';
-import MapView, { Circle, Marker } from 'react-native-maps';
+import MapView, { Circle, Marker, type Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 
 import { supabase } from '../lib/supabase';
 import { MSU_REGION, distanceMeters, nowMs } from '../utils/geo';
+import { LOTS, type Lot } from '../data/lots';
 
 type LotStatus = 'OPEN' | 'FILLING' | 'FULL';
-
-type Lot = {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-};
 
 type Signal = {
   id: string;
@@ -54,27 +50,6 @@ const STATUS_COLOR: Record<LotStatus, string> = {
   FULL: '#ef4444',
 };
 
-const LOTS: Lot[] = [
-  { id: 'lot-7', name: 'Lot 7 (IM East)', lat: 42.72452, lng: -84.47234 },
-  { id: 'lot-15', name: 'Lot 15 (Wharton)', lat: 42.72951, lng: -84.48335 },
-  { id: 'lot-21', name: 'Lot 21 (Spartan Stadium)', lat: 42.72818, lng: -84.48201 },
-  { id: 'lot-23', name: 'Lot 23 (STEM)', lat: 42.73097, lng: -84.4782 },
-  { id: 'lot-24', name: 'Lot 24 (Breslin)', lat: 42.72899, lng: -84.49544 },
-  { id: 'lot-25', name: 'Lot 25 (IM West)', lat: 42.72495, lng: -84.48796 },
-  { id: 'lot-27', name: 'Lot 27 (Engineering)', lat: 42.72644, lng: -84.47886 },
-  { id: 'lot-30', name: 'Lot 30 (Clinical Center)', lat: 42.73263, lng: -84.47874 },
-  { id: 'lot-39', name: 'Lot 39 (Auditorium)', lat: 42.73203, lng: -84.48476 },
-  { id: 'lot-41', name: 'Lot 41 (Agriculture Hall)', lat: 42.72599, lng: -84.48002 },
-  { id: 'lot-53', name: 'Lot 53 (Shaw Ramp)', lat: 42.7268, lng: -84.47938 },
-  { id: 'lot-60', name: 'Lot 60 (Hannah)', lat: 42.73458, lng: -84.49248 },
-  { id: 'lot-62w', name: 'Lot 62W (Bogue Street)', lat: 42.73003, lng: -84.47075 },
-  { id: 'lot-63', name: 'Lot 63 (CATA)', lat: 42.73246, lng: -84.47469 },
-  { id: 'lot-67', name: 'Lot 67 (Kellogg)', lat: 42.73215, lng: -84.48595 },
-  { id: 'lot-75', name: 'Lot 75 (Brody)', lat: 42.73351, lng: -84.49783 },
-  { id: 'lot-79', name: 'Lot 79 (Munn)', lat: 42.72729, lng: -84.48989 },
-  { id: 'lot-91', name: 'Lot 91 (Service Rd)', lat: 42.72176, lng: -84.48538 },
-  { id: 'lot-100', name: 'Lot 100 (Research)', lat: 42.73576, lng: -84.47542 },
-];
 
 const SIGMOID = (x: number) => 1 / (1 + Math.exp(-x));
 
@@ -92,11 +67,49 @@ const INITIAL_CONSENSUS: Record<string, LotConsensus> = LOTS.reduce((acc, lot) =
 const MAX_SIGNAL_AGE_MIN = 180;
 
 export default function MapScreen() {
+  const mapRef = useRef<MapView | null>(null);
+  const [mapRegion, setMapRegion] = useState<Region>(MSU_REGION);
+  const [query, setQuery] = useState('');
+  const [focusedLotId, setFocusedLotId] = useState<string | null>(null);
+  const [resultsOpen, setResultsOpen] = useState(false);
   const [signals, setSignals] = useState<Signal[]>([]);
   const [consensus, setConsensus] = useState<Record<string, LotConsensus>>(INITIAL_CONSENSUS);
   const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
   const [composer, setComposer] = useState<{ mode: 'post' | 'update'; lotId: string | null } | null>(null);
   const [clock, setClock] = useState(nowMs());
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [] as Lot[];
+    return LOTS.filter(
+      (lot) => lot.name.toLowerCase().includes(q) || lot.id.toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [query]);
+
+  const visibleLots = useMemo(() => {
+    const center = { lat: mapRegion.latitude, lng: mapRegion.longitude };
+    const ranked = LOTS.map((lot) => ({
+      lot,
+      d2: (lot.lat - center.lat) ** 2 + (lot.lng - center.lng) ** 2,
+    }))
+      .sort((a, b) => a.d2 - b.d2)
+      .slice(0, 20)
+      .map((entry) => entry.lot);
+
+    if (!focusedLotId) {
+      return ranked;
+    }
+
+    const focused = LOTS.find((lot) => lot.id === focusedLotId);
+    if (!focused) {
+      return ranked;
+    }
+
+    const merged = new Map<string, Lot>();
+    ranked.forEach((lot) => merged.set(lot.id, lot));
+    merged.set(focused.id, focused);
+    return Array.from(merged.values());
+  }, [focusedLotId, mapRegion]);
 
   useEffect(() => {
     const handle = setInterval(() => {
@@ -104,6 +117,21 @@ export default function MapScreen() {
     }, 30_000);
     return () => clearInterval(handle);
   }, []);
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setResultsOpen(false);
+      if (!selectedLotId) {
+        setFocusedLotId(null);
+      }
+    }
+  }, [query, selectedLotId]);
+
+  useEffect(() => {
+    if (selectedLotId) {
+      setFocusedLotId(selectedLotId);
+    }
+  }, [selectedLotId]);
 
   useEffect(() => {
     setSignals((prev) => {
@@ -129,6 +157,33 @@ export default function MapScreen() {
     [selectedLotId]
   );
   const selectedConsensus = selectedLot ? consensus[selectedLot.id] : null;
+
+  const handleSelectLot = useCallback((id: string) => {
+    const lot = LOTS.find((item) => item.id === id);
+    if (!lot) return;
+    setFocusedLotId(id);
+    setResultsOpen(false);
+    setQuery(lot.name);
+    mapRef.current?.animateToRegion(
+      {
+        latitude: lot.lat,
+        longitude: lot.lng,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      },
+      300
+    );
+  }, []);
+
+  const handleClearQuery = useCallback(() => {
+    setQuery('');
+    setResultsOpen(false);
+    if (!selectedLotId) {
+      setFocusedLotId(null);
+    }
+  }, [selectedLotId]);
+
+  const hasSearch = query.trim().length > 0;
 
   const ensurePresence = useCallback(async (lot: Lot) => {
     const perm = await Location.requestForegroundPermissionsAsync();
@@ -212,19 +267,48 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <MapView style={styles.map} initialRegion={MSU_REGION}>
-        {LOTS.map((lot) => {
+      <MapView
+        ref={(ref) => {
+          mapRef.current = ref;
+        }}
+        style={styles.map}
+        initialRegion={MSU_REGION}
+        onRegionChangeComplete={(region) => setMapRegion(region)}
+        onPress={() => {
+          setResultsOpen(false);
+          if (!hasSearch && !selectedLotId) {
+            setFocusedLotId(null);
+          }
+        }}
+        onLongPress={(event) => {
+          console.log('center', event.nativeEvent.coordinate);
+        }}
+      >
+        {visibleLots.map((lot) => {
           const snapshot = consensus[lot.id] ?? INITIAL_CONSENSUS[lot.id];
           const minutesAgo = Math.max(0, Math.round((clock - snapshot.updatedAt) / 60000));
           const timeLabel = minutesAgo < 1 ? 'Just now' : `${minutesAgo}m ago`;
           const confidence = snapshot.confidence;
           const radius = 70 + 140 * confidence;
           const isConfident = confidence >= 0.6;
+          const isFocused = focusedLotId === lot.id;
+          const isDimmed = hasSearch && !isFocused;
+          const circleStrokeOpacity = (isDimmed ? 0.35 : 0.65).toFixed(2);
+          const circleFillOpacity = (isDimmed ? 0.04 : 0.08).toFixed(2);
           return (
             <React.Fragment key={lot.id}>
-              <Marker coordinate={{ latitude: lot.lat, longitude: lot.lng }} onPress={() => setSelectedLotId(lot.id)}>
-                <View style={styles.markerPill}>
-                  <Text style={[styles.markerText, { color: STATUS_COLOR[snapshot.status] }]}>
+              <Marker
+                coordinate={{ latitude: lot.lat, longitude: lot.lng }}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setFocusedLotId(lot.id);
+                  setSelectedLotId(lot.id);
+                  setResultsOpen(false);
+                }}
+                opacity={isDimmed ? 0.35 : 1}
+              >
+                <View style={[styles.markerPill, isFocused && styles.markerPillFocused]}>
+                  <Text style={[styles.markerText, { color: STATUS_COLOR[snapshot.status] }]}> 
                     [{STATUS_LABEL[snapshot.status]}]
                   </Text>
                   <Text style={styles.markerSub}>{timeLabel}</Text>
@@ -233,15 +317,46 @@ export default function MapScreen() {
               <Circle
                 center={{ latitude: lot.lat, longitude: lot.lng }}
                 radius={radius}
-                strokeColor="rgba(37, 99, 235, 0.65)"
+                strokeColor={`rgba(37, 99, 235, ${circleStrokeOpacity})`}
                 strokeWidth={2}
                 strokeDasharray={isConfident ? undefined : [12, 8]}
-                fillColor="rgba(37, 99, 235, 0.08)"
+                fillColor={`rgba(37, 99, 235, ${circleFillOpacity})`}
               />
             </React.Fragment>
           );
         })}
       </MapView>
+
+      <View style={styles.searchWrap}>
+        <TextInput
+          placeholder="Search lot (e.g., Lot 89, Ramp 2)…"
+          placeholderTextColor="#888"
+          value={query}
+          onChangeText={(text) => {
+            setQuery(text);
+            setResultsOpen(true);
+          }}
+          onFocus={() => setResultsOpen(true)}
+          style={styles.searchInput}
+          returnKeyType="search"
+        />
+        {query.length > 0 && (
+          <Pressable style={styles.clearBtn} onPress={handleClearQuery} accessibilityLabel="Clear search">
+            <Text style={styles.clearBtnText}>✕</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {resultsOpen && results.length > 0 && (
+        <View style={styles.resultsCard}>
+          {results.map((lot) => (
+            <Pressable key={lot.id} style={styles.resultRow} onPress={() => handleSelectLot(lot.id)}>
+              <Text style={styles.resultName}>{lot.name}</Text>
+              <Text style={styles.resultId}>{lot.id}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       <Pressable style={styles.fab} onPress={openPostComposer} accessibilityRole="button" accessibilityLabel="Report parking status">
         <Text style={styles.fabText}>+</Text>
@@ -403,12 +518,82 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  markerPillFocused: {
+    borderColor: '#2563eb',
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
   markerText: {
     fontWeight: '700',
   },
   markerSub: {
     fontSize: 12,
     color: '#4b5563',
+  },
+  searchWrap: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    top: Platform.OS === 'ios' ? 60 : 24,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+    zIndex: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#111827',
+  },
+  clearBtn: {
+    marginLeft: 8,
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+  },
+  clearBtnText: {
+    color: '#666',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  resultsCard: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    top: (Platform.OS === 'ios' ? 60 : 24) + 56,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    overflow: 'hidden',
+    maxHeight: 280,
+    zIndex: 9,
+  },
+  resultRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f1f5f9',
+  },
+  resultName: {
+    fontWeight: '700',
+    color: '#111827',
+  },
+  resultId: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 2,
   },
   fab: {
     position: 'absolute',
