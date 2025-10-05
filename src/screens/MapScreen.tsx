@@ -15,11 +15,17 @@ import {
 import MapView, { Marker, Circle, type Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 
-const APP_ICON = require('../../assets/icon.png');
+let SPARK_ICON: any;
+try {
+  SPARK_ICON = require('../../assets/spark_icon_bolt_1024.png');
+} catch {
+  SPARK_ICON = require('../../assets/icon.png');
+}
 
 import { supabase } from '../lib/supabase';
 import { LOTS } from '../data/lots';
 import { MSU_REGION, distanceMeters, nowMs } from '../utils/geo';
+import BottomNav from '../components/BottomNav';
 
 type LotStatus = 'OPEN' | 'FILLING' | 'FULL';
 
@@ -230,6 +236,15 @@ export default function MapScreen() {
     setComposer({ mode: 'post', lotId: null });
   }, []);
 
+  const handlePressSearchTab = useCallback(() => {
+    setIsSearchFocused(true);
+    searchInputRef.current?.focus();
+  }, []);
+
+  const handlePressFavsTab = useCallback(() => {
+    // TODO: open favorites modal
+  }, []);
+
   const composerLot = useMemo(() => {
     if (!composer) return null;
     if (!composer.lotId) return null;
@@ -315,6 +330,13 @@ export default function MapScreen() {
         </View>
       </View>
 
+      <BottomNav
+        active="map"
+        onMap={() => {}}
+        onSearch={handlePressSearchTab}
+        onFavs={handlePressFavsTab}
+      />
+
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Create Spark"
@@ -326,7 +348,7 @@ export default function MapScreen() {
         android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true }}
         hitSlop={8}
       >
-        <Image source={APP_ICON} resizeMode="contain" style={styles.fabIcon} />
+        <Image source={SPARK_ICON} resizeMode="contain" style={styles.fabIcon} />
       </Pressable>
 
       <Modal transparent animationType="fade" visible={!!selectedLot} onRequestClose={() => setSelectedLotId(null)}>
@@ -556,7 +578,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 24,
+    bottom: 72,
     width: 56,
     height: 56,
     borderRadius: 28,
