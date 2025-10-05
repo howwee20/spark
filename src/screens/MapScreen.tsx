@@ -5,7 +5,7 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../utils/device';
-import { toCellId } from '../utils/geocell';
+import { coordsToCellId } from '../utils/geocell';
 
 type LotStatus = 'empty' | 'filling' | 'tight' | 'full' | null;
 type LotRow = { id: string; name: string; lat: number; lng: number; status: LotStatus; confidence: number | null; isFavorite?: boolean };
@@ -154,7 +154,7 @@ export default function MapScreen() {
     const { status: perm } = await Location.requestForegroundPermissionsAsync();
     if (perm !== 'granted') { Alert.alert('Location needed', 'We use your location to create a coarse safety alert.'); return; }
     const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    const cell_id = toCellId(loc.coords.latitude, loc.coords.longitude);
+    const cell_id = coordsToCellId(loc.coords.latitude, loc.coords.longitude);
     await supabase.from('pace_reports').insert({ cell_id });
   };
 
