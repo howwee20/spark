@@ -382,7 +382,7 @@ export default function MapScreen() {
         <View style={styles.backdrop}>
           <View style={styles.composer}>
             <Text style={styles.composerTitle}>
-              {composer?.mode === 'update' ? 'Update lot status' : 'Post parking status'}
+              {composer?.mode === 'update' ? 'Update lot status' : 'Spark'}
             </Text>
             {!composerLot && (
               <View style={styles.listContainer}>
