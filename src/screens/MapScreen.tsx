@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -8,24 +8,22 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  TextInput,
   View,
+  Platform,
 } from 'react-native';
-import MapView, { Circle, Marker } from 'react-native-maps';
+import MapView, { Marker, Circle, type Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 
 const APP_ICON = require('../../assets/icon.png');
 
 import { supabase } from '../lib/supabase';
+import { LOTS } from '../data/lots';
 import { MSU_REGION, distanceMeters, nowMs } from '../utils/geo';
 
 type LotStatus = 'OPEN' | 'FILLING' | 'FULL';
 
-type Lot = {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-};
+type Lot = (typeof LOTS)[number];
 
 type Signal = {
   id: string;
@@ -57,28 +55,6 @@ const STATUS_COLOR: Record<LotStatus, string> = {
   FULL: '#ef4444',
 };
 
-const LOTS: Lot[] = [
-  { id: 'lot-7', name: 'Lot 7 (IM East)', lat: 42.72452, lng: -84.47234 },
-  { id: 'lot-15', name: 'Lot 15 (Wharton)', lat: 42.72951, lng: -84.48335 },
-  { id: 'lot-21', name: 'Lot 21 (Spartan Stadium)', lat: 42.72818, lng: -84.48201 },
-  { id: 'lot-23', name: 'Lot 23 (STEM)', lat: 42.73097, lng: -84.4782 },
-  { id: 'lot-24', name: 'Lot 24 (Breslin)', lat: 42.72899, lng: -84.49544 },
-  { id: 'lot-25', name: 'Lot 25 (IM West)', lat: 42.72495, lng: -84.48796 },
-  { id: 'lot-27', name: 'Lot 27 (Engineering)', lat: 42.72644, lng: -84.47886 },
-  { id: 'lot-30', name: 'Lot 30 (Clinical Center)', lat: 42.73263, lng: -84.47874 },
-  { id: 'lot-39', name: 'Lot 39 (Auditorium)', lat: 42.73203, lng: -84.48476 },
-  { id: 'lot-41', name: 'Lot 41 (Agriculture Hall)', lat: 42.72599, lng: -84.48002 },
-  { id: 'lot-53', name: 'Lot 53 (Shaw Ramp)', lat: 42.7268, lng: -84.47938 },
-  { id: 'lot-60', name: 'Lot 60 (Hannah)', lat: 42.73458, lng: -84.49248 },
-  { id: 'lot-62w', name: 'Lot 62W (Bogue Street)', lat: 42.73003, lng: -84.47075 },
-  { id: 'lot-63', name: 'Lot 63 (CATA)', lat: 42.73246, lng: -84.47469 },
-  { id: 'lot-67', name: 'Lot 67 (Kellogg)', lat: 42.73215, lng: -84.48595 },
-  { id: 'lot-75', name: 'Lot 75 (Brody)', lat: 42.73351, lng: -84.49783 },
-  { id: 'lot-79', name: 'Lot 79 (Munn)', lat: 42.72729, lng: -84.48989 },
-  { id: 'lot-91', name: 'Lot 91 (Service Rd)', lat: 42.72176, lng: -84.48538 },
-  { id: 'lot-100', name: 'Lot 100 (Research)', lat: 42.73576, lng: -84.47542 },
-];
-
 const SIGMOID = (x: number) => 1 / (1 + Math.exp(-x));
 
 const INITIAL_CONSENSUS: Record<string, LotConsensus> = LOTS.reduce((acc, lot) => {
@@ -100,6 +76,53 @@ export default function MapScreen() {
   const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
   const [composer, setComposer] = useState<{ mode: 'post' | 'update'; lotId: string | null } | null>(null);
   const [clock, setClock] = useState(nowMs());
+  const mapRef = useRef<MapView | null>(null);
+  const searchInputRef = useRef<TextInput | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  const normalizedSearch = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
+  const searchResults = useMemo<Lot[]>(() => {
+    if (!normalizedSearch) {
+      return [];
+    }
+    return LOTS.filter((lot) => {
+      const name = lot.name.toLowerCase();
+      const id = lot.id.toLowerCase();
+      return name.includes(normalizedSearch) || id.includes(normalizedSearch);
+    }).slice(0, 6);
+  }, [normalizedSearch]);
+
+  const hasSearchQuery = normalizedSearch.length > 0;
+  const showSearchResults = (isSearchFocused || hasSearchQuery) && searchResults.length > 0;
+  const showEmptySearchState = (isSearchFocused || hasSearchQuery) && hasSearchQuery && searchResults.length === 0;
+
+  const focusMapOnLot = useCallback((lot: Lot) => {
+    const region: Region = {
+      latitude: lot.lat,
+      longitude: lot.lng,
+      latitudeDelta: 0.004,
+      longitudeDelta: 0.004,
+    };
+    const duration = Platform.select({ ios: 450, android: 350, default: 400 }) ?? 400;
+    mapRef.current?.animateToRegion(region, duration);
+  }, []);
+
+  const handleSelectSearchResult = useCallback(
+    (lot: Lot) => {
+      focusMapOnLot(lot);
+      setSearchQuery('');
+      setIsSearchFocused(false);
+      searchInputRef.current?.blur();
+    },
+    [focusMapOnLot],
+  );
+
+  const handleSubmitSearch = useCallback(() => {
+    if (searchResults.length > 0) {
+      handleSelectSearchResult(searchResults[0]);
+    }
+  }, [handleSelectSearchResult, searchResults]);
 
   useEffect(() => {
     const handle = setInterval(() => {
@@ -215,7 +238,7 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <MapView style={styles.map} initialRegion={MSU_REGION}>
+      <MapView ref={mapRef} style={styles.map} initialRegion={MSU_REGION}>
         {LOTS.map((lot) => {
           const snapshot = consensus[lot.id] ?? INITIAL_CONSENSUS[lot.id];
           const minutesAgo = Math.max(0, Math.round((clock - snapshot.updatedAt) / 60000));
@@ -245,6 +268,52 @@ export default function MapScreen() {
           );
         })}
       </MapView>
+
+      <View pointerEvents="box-none" style={styles.searchWrapper}>
+        <View pointerEvents="box-none">
+          <View style={styles.searchContainer}>
+            <TextInput
+              ref={searchInputRef}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search for a lot"
+              placeholderTextColor="#9ca3af"
+              style={styles.searchInput}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              onSubmitEditing={handleSubmitSearch}
+            />
+          </View>
+          {showSearchResults && (
+            <View style={styles.searchResults}>
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <Pressable
+                    style={styles.searchResultItem}
+                    onPress={() => handleSelectSearchResult(item)}
+                  >
+                    <Text style={styles.searchResultName}>{item.name}</Text>
+                    <Text style={styles.searchResultMeta}>Jump to map</Text>
+                  </Pressable>
+                )}
+                keyboardShouldPersistTaps="handled"
+              />
+            </View>
+          )}
+          {showEmptySearchState && (
+            <View style={styles.searchResults}>
+              <View style={styles.searchEmpty}>
+                <Text style={styles.searchEmptyText}>No matching lots</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
 
       <Pressable
         accessibilityRole="button"
@@ -422,6 +491,67 @@ const styles = StyleSheet.create({
   markerSub: {
     fontSize: 12,
     color: '#4b5563',
+  },
+  searchWrapper: {
+    position: 'absolute',
+    top: Platform.select({ ios: 16, android: 24, default: 20 }) ?? 20,
+    left: 16,
+    right: 16,
+    zIndex: 30,
+  },
+  searchContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: Platform.select({ ios: 12, android: 8, default: 10 }) ?? 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e5e7eb',
+  },
+  searchInput: {
+    fontSize: 16,
+    color: '#111827',
+  },
+  searchResults: {
+    marginTop: 8,
+    borderRadius: 16,
+    backgroundColor: 'white',
+    maxHeight: 240,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+      },
+      default: {
+        elevation: 6,
+      },
+    }),
+  },
+  searchResultItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e5e7eb',
+  },
+  searchResultName: {
+    fontWeight: '600',
+    color: '#111827',
+  },
+  searchResultMeta: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  searchEmpty: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchEmptyText: {
+    color: '#6b7280',
+    fontSize: 14,
   },
   fab: {
     position: 'absolute',
