@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Image,
   Modal,
   Pressable,
   SafeAreaView,
@@ -11,6 +12,8 @@ import {
 } from 'react-native';
 import MapView, { Circle, Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
+
+const APP_ICON = require('../../assets/icon.png');
 
 import { supabase } from '../lib/supabase';
 import { MSU_REGION, distanceMeters, nowMs } from '../utils/geo';
@@ -243,8 +246,18 @@ export default function MapScreen() {
         })}
       </MapView>
 
-      <Pressable style={styles.fab} onPress={openPostComposer} accessibilityRole="button" accessibilityLabel="Report parking status">
-        <Text style={styles.fabText}>+</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Create Spark"
+        onPress={openPostComposer}
+        style={({ pressed }) => [
+          styles.fab,
+          pressed && { transform: [{ scale: 0.98 }], opacity: 0.9 },
+        ]}
+        android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true }}
+        hitSlop={8}
+      >
+        <Image source={APP_ICON} resizeMode="contain" style={styles.fabIcon} />
       </Pressable>
 
       <Modal transparent animationType="fade" visible={!!selectedLot} onRequestClose={() => setSelectedLotId(null)}>
@@ -412,25 +425,23 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    right: 20,
-    bottom: 32,
-    backgroundColor: '#111827',
+    right: 16,
+    bottom: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
+    backgroundColor: '#0F2F27',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 8,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  fabText: {
-    color: 'white',
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: -4,
+  fabIcon: {
+    width: 28,
+    height: 28,
   },
   backdrop: {
     flex: 1,
