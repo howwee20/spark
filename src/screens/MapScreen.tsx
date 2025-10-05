@@ -257,7 +257,7 @@ export default function MapScreen() {
         android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true }}
         hitSlop={8}
       >
-        <Image source={APP_ICON} resizeMode="contain" style={styles.fabIcon} />
+        <Image source={APP_ICON} resizeMode="contain" style={{ width: 28, height: 28 }} />
       </Pressable>
 
       <Modal transparent animationType="fade" visible={!!selectedLot} onRequestClose={() => setSelectedLotId(null)}>
@@ -438,10 +438,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
-  },
-  fabIcon: {
-    width: 28,
-    height: 28,
   },
   backdrop: {
     flex: 1,
