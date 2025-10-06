@@ -1,28 +1,32 @@
-export type LotDefinition = {
+export interface Lot {
   id: string;
   name: string;
   lat: number;
   lng: number;
-};
+}
 
-export const LOTS: LotDefinition[] = [
-  { id: 'lot-7', name: 'Lot 7 (IM East)', lat: 42.72452, lng: -84.47234 },
-  { id: 'lot-15', name: 'Lot 15 (Wharton)', lat: 42.72951, lng: -84.48335 },
-  { id: 'lot-21', name: 'Lot 21 (Spartan Stadium)', lat: 42.72818, lng: -84.48201 },
-  { id: 'lot-23', name: 'Lot 23 (STEM)', lat: 42.73097, lng: -84.4782 },
-  { id: 'lot-24', name: 'Lot 24 (Breslin)', lat: 42.72899, lng: -84.49544 },
-  { id: 'lot-25', name: 'Lot 25 (IM West)', lat: 42.72495, lng: -84.48796 },
-  { id: 'lot-27', name: 'Lot 27 (Engineering)', lat: 42.72644, lng: -84.47886 },
-  { id: 'lot-30', name: 'Lot 30 (Clinical Center)', lat: 42.73263, lng: -84.47874 },
-  { id: 'lot-39', name: 'Lot 39 (Auditorium)', lat: 42.73203, lng: -84.48476 },
-  { id: 'lot-41', name: 'Lot 41 (Agriculture Hall)', lat: 42.72599, lng: -84.48002 },
-  { id: 'lot-53', name: 'Lot 53 (Shaw Ramp)', lat: 42.7268, lng: -84.47938 },
-  { id: 'lot-60', name: 'Lot 60 (Hannah)', lat: 42.73458, lng: -84.49248 },
-  { id: 'lot-62w', name: 'Lot 62W (Bogue Street)', lat: 42.73003, lng: -84.47075 },
-  { id: 'lot-63', name: 'Lot 63 (CATA)', lat: 42.73246, lng: -84.47469 },
-  { id: 'lot-67', name: 'Lot 67 (Kellogg)', lat: 42.73215, lng: -84.48595 },
-  { id: 'lot-75', name: 'Lot 75 (Brody)', lat: 42.73351, lng: -84.49783 },
-  { id: 'lot-79', name: 'Lot 79 (Munn)', lat: 42.72729, lng: -84.48989 },
-  { id: 'lot-91', name: 'Lot 91 (Service Rd)', lat: 42.72176, lng: -84.48538 },
-  { id: 'lot-100', name: 'Lot 100 (Research)', lat: 42.73576, lng: -84.47542 },
+export const msuLots: Lot[] = [
+  // --- MAJOR PARKING RAMPS ---
+  { id: 'ramp_1', name: 'Ramp 1 / Wharton Center',     lat: 42.7247, lng: -84.4883 }, // VERIFY
+  { id: 'ramp_3', name: 'Ramp 3 / Shaw Hall',          lat: 42.7262, lng: -84.4777 }, // VERIFY
+  { id: 'ramp_5', name: 'Ramp 5 / Comm Arts',          lat: 42.7214, lng: -84.4678 }, // VERIFY
+  { id: 'ramp_6', name: 'Ramp 6 / Grand River Ave',    lat: 42.7368, lng: -84.4828 }, // VERIFY
+
+  // --- KEY STADIUM & ARENA LOTS ---
+  { id: 'lot_79',  name: 'Lot 79 / Spartan Stadium',   lat: 42.7260, lng: -84.4870 }, // VERIFY
+  { id: 'lot_63',  name: 'Lot 63 / Breslin Center',    lat: 42.7280, lng: -84.4920 }, // VERIFY
+  { id: 'lot_124', name: 'Lot 124 / Munn Arena',       lat: 42.7272, lng: -84.4905 }, // VERIFY
+
+  // --- CORE ACADEMIC AREA LOTS (NORTH CAMPUS) ---
+  { id: 'lot_39',  name: 'Lot 39 / MSU Union',         lat: 42.7347, lng: -84.4802 }, // VERIFY
+  { id: 'lot_62',  name: 'Lot 62 / IM Sports West',    lat: 42.7311, lng: -84.4862 }, // VERIFY
+  { id: 'lot_15',  name: 'Lot 15 / International Center', lat: 42.7275, lng: -84.4788 }, // VERIFY
+
+  // --- CORE RESIDENTIAL AREA LOTS (SOUTH CAMPUS) ---
+  { id: 'lot_89',  name: 'Lot 89 / Wilson & Case Halls', lat: 42.7190, lng: -84.4830 }, // VERIFY
+  { id: 'lot_83',  name: 'Lot 83 / Business College',  lat: 42.7230, lng: -84.4810 }, // VERIFY
+
+  // --- MAJOR COMMUTER & PERIMETER LOTS ---
+  { id: 'lot_91',  name: 'Lot 91 / Commuter Lot (Service Rd)', lat: 42.7160, lng: -84.4780 }, // VERIFY
+  { id: 'lot_80',  name: 'Lot 80 / Vet Med',           lat: 42.7120, lng: -84.4690 }, // VERIFY
 ];
