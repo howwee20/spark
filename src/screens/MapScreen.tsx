@@ -23,13 +23,11 @@ try {
 }
 
 import { supabase } from '../lib/supabase';
-import { LOTS } from '../data/lots';
+import { msuLots, type Lot } from '../data/lots';
 import { MSU_REGION, distanceMeters, nowMs } from '../utils/geo';
 import BottomNav from '../components/BottomNav';
 
 type LotStatus = 'OPEN' | 'FILLING' | 'FULL';
-
-type Lot = (typeof LOTS)[number];
 
 type Signal = {
   id: string;
@@ -63,7 +61,7 @@ const STATUS_COLOR: Record<LotStatus, string> = {
 
 const SIGMOID = (x: number) => 1 / (1 + Math.exp(-x));
 
-const INITIAL_CONSENSUS: Record<string, LotConsensus> = LOTS.reduce((acc, lot) => {
+const INITIAL_CONSENSUS: Record<string, LotConsensus> = msuLots.reduce((acc, lot) => {
   acc[lot.id] = {
     status: 'OPEN',
     margin: 0,
@@ -92,7 +90,7 @@ export default function MapScreen() {
     if (!normalizedSearch) {
       return [];
     }
-    return LOTS.filter((lot) => {
+    return msuLots.filter((lot) => {
       const name = lot.name.toLowerCase();
       const id = lot.id.toLowerCase();
       return name.includes(normalizedSearch) || id.includes(normalizedSearch);
@@ -148,7 +146,7 @@ export default function MapScreen() {
     setConsensus((prev) => {
       const now = nowMs();
       const next: Record<string, LotConsensus> = {};
-      LOTS.forEach((lot) => {
+      msuLots.forEach((lot) => {
         const prior = prev[lot.id] ?? INITIAL_CONSENSUS[lot.id];
         next[lot.id] = computeConsensusForLot(lot.id, prior, signals, now);
       });
@@ -157,7 +155,7 @@ export default function MapScreen() {
   }, [signals, clock]);
 
   const selectedLot = useMemo(
-    () => LOTS.find((lot) => lot.id === selectedLotId) ?? null,
+    () => msuLots.find((lot) => lot.id === selectedLotId) ?? null,
     [selectedLotId]
   );
   const selectedConsensus = selectedLot ? consensus[selectedLot.id] : null;
@@ -215,7 +213,7 @@ export default function MapScreen() {
     async (status: LotStatus) => {
       if (!composer) return;
       const lot = composer.lotId
-        ? LOTS.find((item) => item.id === composer.lotId)
+        ? msuLots.find((item) => item.id === composer.lotId)
         : null;
       if (!lot) return;
       const presence = await ensurePresence(lot);
@@ -248,13 +246,13 @@ export default function MapScreen() {
   const composerLot = useMemo(() => {
     if (!composer) return null;
     if (!composer.lotId) return null;
-    return LOTS.find((lot) => lot.id === composer.lotId) ?? null;
+    return msuLots.find((lot) => lot.id === composer.lotId) ?? null;
   }, [composer]);
 
   return (
     <SafeAreaView style={styles.container}>
       <MapView ref={mapRef} style={styles.map} initialRegion={MSU_REGION}>
-        {LOTS.map((lot) => {
+        {msuLots.map((lot) => {
           const snapshot = consensus[lot.id] ?? INITIAL_CONSENSUS[lot.id];
           const minutesAgo = Math.max(0, Math.round((clock - snapshot.updatedAt) / 60000));
           const timeLabel = minutesAgo < 1 ? 'Just now' : `${minutesAgo}m ago`;
@@ -388,7 +386,7 @@ export default function MapScreen() {
               <View style={styles.listContainer}>
                 <Text style={styles.listHeader}>Pick a lot</Text>
                 <FlatList
-                  data={LOTS}
+                  data={msuLots}
                   keyExtractor={(item) => item.id}
                   renderItem={({ item }) => (
                     <Pressable
