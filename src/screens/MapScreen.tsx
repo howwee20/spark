@@ -27,33 +27,33 @@ import { msuLots, type Lot } from '../data/lots';
 import { MSU_REGION, distanceMeters, nowMs } from '../utils/geo';
 import BottomNav from '../components/BottomNav';
 
-type LotStatus = 'OPEN' | 'FILLING' | 'FULL';
+type ParkingState = 'OPEN' | 'FILLING' | 'FULL';
 
 type Signal = {
   id: string;
   lotId: string;
-  status: LotStatus;
+  status: ParkingState;
   createdAt: number;
   source: 'post' | 'agree' | 'update';
 };
 
 type LotConsensus = {
-  status: LotStatus;
+  status: ParkingState;
   margin: number;
   confidence: number;
   updatedAt: number;
-  pending?: { status: LotStatus; seenAt: number } | null;
+  pending?: { status: ParkingState; seenAt: number } | null;
 };
 
-const LOT_STATUSES: LotStatus[] = ['OPEN', 'FILLING', 'FULL'];
+const LOT_STATUSES: ParkingState[] = ['OPEN', 'FILLING', 'FULL'];
 
-const STATUS_LABEL: Record<LotStatus, string> = {
+const STATUS_LABEL: Record<ParkingState, string> = {
   OPEN: 'OPEN',
   FILLING: 'FILLING',
   FULL: 'FULL',
 };
 
-const STATUS_COLOR: Record<LotStatus, string> = {
+const STATUS_COLOR: Record<ParkingState, string> = {
   OPEN: '#22c55e',
   FILLING: '#eab308',
   FULL: '#ef4444',
@@ -177,7 +177,7 @@ export default function MapScreen() {
   }, []);
 
   const pushSignal = useCallback(
-    async (lot: Lot, status: LotStatus, source: Signal['source']) => {
+    async (lot: Lot, status: ParkingState, source: Signal['source']) => {
       const timestamp = nowMs();
       const entry: Signal = {
         id: `${lot.id}-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
@@ -210,7 +210,7 @@ export default function MapScreen() {
   }, [ensurePresence, pushSignal, selectedConsensus, selectedLot]);
 
   const handleComposerStatus = useCallback(
-    async (status: LotStatus) => {
+    async (status: ParkingState) => {
       if (!composer) return;
       const lot = composer.lotId
         ? msuLots.find((item) => item.id === composer.lotId)
@@ -436,7 +436,7 @@ function computeConsensusForLot(
 ): LotConsensus {
   const relevant = signals.filter((signal) => signal.lotId === lotId);
   const fresh = relevant.filter((signal) => (now - signal.createdAt) / 60000 <= MAX_SIGNAL_AGE_MIN);
-  const weights: Record<LotStatus, number> = {
+  const weights: Record<ParkingState, number> = {
     OPEN: 0,
     FILLING: 0,
     FULL: 0,

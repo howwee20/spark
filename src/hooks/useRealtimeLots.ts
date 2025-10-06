@@ -14,7 +14,7 @@ type LotCurrentRow = {
 
 export type LotStatus = 'empty' | 'filling' | 'tight' | 'full' | string;
 
-export type Lot = {
+export type RealtimeLot = {
   id: number;
   name: string;
   lat: number;
@@ -47,7 +47,7 @@ const normalizeLotCurrent = (value: RawLotRow['lot_current']): LotCurrentRow | n
 };
 
 export type UseRealtimeLotsResult = {
-  lots: Lot[];
+  lots: RealtimeLot[];
   isLoading: boolean;
   error: PostgrestError | null;
   isRealtimeConnected: boolean;
@@ -56,7 +56,7 @@ export type UseRealtimeLotsResult = {
 };
 
 export const useRealtimeLots = (): UseRealtimeLotsResult => {
-  const [lots, setLots] = useState<Lot[]>([]);
+  const [lots, setLots] = useState<RealtimeLot[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<PostgrestError | null>(null);
   const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(false);
@@ -71,7 +71,7 @@ export const useRealtimeLots = (): UseRealtimeLotsResult => {
     };
   }, []);
 
-  const mapLots = useCallback((rows: RawLotRow[]): Lot[] => {
+  const mapLots = useCallback((rows: RawLotRow[]): RealtimeLot[] => {
     return rows.map((row) => {
       const current = normalizeLotCurrent(row.lot_current);
 
