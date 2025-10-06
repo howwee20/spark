@@ -15,14 +15,12 @@ import {
 import MapView, { Marker, Circle, type Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 
-let SPARK_ICON: any;
-try {
-  SPARK_ICON = require('../../assets/spark_icon_bolt_1024.png');
-} catch {
-  SPARK_ICON = require('../../assets/icon.png');
-}
+const APP_ICON = require('../../assets/icon.png');
 
+// Exactly one supabase import; no inline clients here.
 import { supabase } from '../lib/supabase';
+
+// Prefer canonical Lot type + dataset if present:
 import { msuLots, type Lot } from '../data/lots';
 import { MSU_REGION, distanceMeters, nowMs } from '../utils/geo';
 import BottomNav from '../components/BottomNav';
@@ -346,7 +344,7 @@ export default function MapScreen() {
         android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true }}
         hitSlop={8}
       >
-        <Image source={SPARK_ICON} resizeMode="contain" style={styles.fabIcon} />
+        <Image source={APP_ICON} resizeMode="contain" style={styles.fabIcon} />
       </Pressable>
 
       <Modal transparent animationType="fade" visible={!!selectedLot} onRequestClose={() => setSelectedLotId(null)}>
