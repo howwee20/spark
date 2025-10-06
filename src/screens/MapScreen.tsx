@@ -1,3 +1,4 @@
+import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -11,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import MapView, { Circle, Marker } from 'react-native-maps';
-import * as Location from 'expo-location';
 
 const APP_ICON = require('../../assets/icon.png');
 
@@ -58,25 +58,20 @@ const STATUS_COLOR: Record<LotStatus, string> = {
 };
 
 const LOTS: Lot[] = [
-  { id: 'lot-7', name: 'Lot 7 (IM East)', lat: 42.72452, lng: -84.47234 },
-  { id: 'lot-15', name: 'Lot 15 (Wharton)', lat: 42.72951, lng: -84.48335 },
-  { id: 'lot-21', name: 'Lot 21 (Spartan Stadium)', lat: 42.72818, lng: -84.48201 },
-  { id: 'lot-23', name: 'Lot 23 (STEM)', lat: 42.73097, lng: -84.4782 },
-  { id: 'lot-24', name: 'Lot 24 (Breslin)', lat: 42.72899, lng: -84.49544 },
-  { id: 'lot-25', name: 'Lot 25 (IM West)', lat: 42.72495, lng: -84.48796 },
+  { id: 'lot-24', name: 'Lot 24 (Breslin)', lat: 42.7265, lng: -84.4925 },
+  { id: 'lot-25', name: 'Lot 25 (IM West)', lat: 42.730, lng: -84.4865 },
   { id: 'lot-27', name: 'Lot 27 (Engineering)', lat: 42.72644, lng: -84.47886 },
   { id: 'lot-30', name: 'Lot 30 (Clinical Center)', lat: 42.73263, lng: -84.47874 },
-  { id: 'lot-39', name: 'Lot 39 (Auditorium)', lat: 42.73203, lng: -84.48476 },
-  { id: 'lot-41', name: 'Lot 41 (Agriculture Hall)', lat: 42.72599, lng: -84.48002 },
-  { id: 'lot-53', name: 'Lot 53 (Shaw Ramp)', lat: 42.7268, lng: -84.47938 },
-  { id: 'lot-60', name: 'Lot 60 (Hannah)', lat: 42.73458, lng: -84.49248 },
-  { id: 'lot-62w', name: 'Lot 62W (Bogue Street)', lat: 42.73003, lng: -84.47075 },
-  { id: 'lot-63', name: 'Lot 63 (CATA)', lat: 42.73246, lng: -84.47469 },
-  { id: 'lot-67', name: 'Lot 67 (Kellogg)', lat: 42.73215, lng: -84.48595 },
-  { id: 'lot-75', name: 'Lot 75 (Brody)', lat: 42.73351, lng: -84.49783 },
-  { id: 'lot-79', name: 'Lot 79 (Munn)', lat: 42.72729, lng: -84.48989 },
-  { id: 'lot-91', name: 'Lot 91 (Service Rd)', lat: 42.72176, lng: -84.48538 },
-  { id: 'lot-100', name: 'Lot 100 (Research)', lat: 42.73576, lng: -84.47542 },
+  { id: 'lot-41', name: 'Lot 41 (Agriculture Hall)', lat: 42.7256, lng: -84.4773 },
+  { id: 'lot-46', name: 'Lot 46 (Plant Biology)', lat: 42.722114, lng: -84.475314 },
+  { id: 'Ramp 4', name: 'Ramp 4 (Kellogg Center)', lat: 42.731, lng: -84.493 },
+  { id: 'lot-79', name: 'Lot 79 (Spartan Stadium)', lat: 42.7267, lng: -84.485 },
+  { id: 'lot-91', name: 'Lot 91 (Service Rd)', lat: 42.720, lng: -84.464},
+  { id: 'lot-89', name: 'Lot 89 (Mount Hope)', lat: 42.713, lng: -84.480 },
+  { id: 'Ramp 3', name: 'Ramp 3 (Wharton Center)', lat: 42.724, lng: -84.4695 },
+  { id: 'Ramp 1', name: 'Ramp 1 (Law Building)', lat: 42.7256, lng: -84.4745 },
+  { id: 'lot-39', name: 'Lot 39 (International Building)', lat: 42.7256, lng: -84.4790 },
+  
 ];
 
 const SIGMOID = (x: number) => 1 / (1 + Math.exp(-x));
@@ -143,7 +138,7 @@ export default function MapScreen() {
     const here = { lat: loc.coords.latitude, lng: loc.coords.longitude };
     const distance = distanceMeters(here, { lat: lot.lat, lng: lot.lng });
     if (distance > 200) {
-      Alert.alert('Too far away', 'You must be within 200 meters of this lot to submit.');
+      Alert.alert('You must be within 200 meters of this lot to submit.');
       return null;
     }
     return { here, distance };
@@ -291,7 +286,7 @@ export default function MapScreen() {
         <View style={styles.backdrop}>
           <View style={styles.composer}>
             <Text style={styles.composerTitle}>
-              {composer?.mode === 'update' ? 'Update lot status' : 'Post parking status'}
+              {composer?.mode === 'update' ? 'Update lot status' : 'Spark'}
             </Text>
             {!composerLot && (
               <View style={styles.listContainer}>

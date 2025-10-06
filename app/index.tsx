@@ -1,3 +1,4 @@
+// app/index.tsx
 import React from 'react';
 import { StatusBar } from 'react-native';
 import MapScreen from '../src/screens/MapScreen';
